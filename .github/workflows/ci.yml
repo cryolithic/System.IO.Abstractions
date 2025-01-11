@@ -14,20 +14,20 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Setup .NET
-        uses: actions/setup-dotnet@v1
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: | 
-            3.1.x
-            5.0.x
             6.0.x
+            7.0.x
+            8.0.x
       - name: Run tests
         run: dotnet test --collect:"XPlat Code Coverage"  --logger "GitHubActions"
       - name: Upload coverage
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: Code coverage ${{ matrix.os }}
           path: "**/coverage.cobertura.xml"
@@ -37,23 +37,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Setup .NET
-        uses: actions/setup-dotnet@v1
-      - uses: actions/download-artifact@v2
+        uses: actions/setup-dotnet@v4
+      - uses: actions/download-artifact@v4
         with:
           name: Code coverage ubuntu-latest
           path: coverage-ubuntu
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v4
         with:
           name: Code coverage windows-latest
           path: coverage-windows
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v4
         with:
           name: Code coverage macos-latest
           path: coverage-macos
       - name: Generate coverage report
-        uses: danielpalme/ReportGenerator-GitHub-Action@5.0.2
+        uses: danielpalme/ReportGenerator-GitHub-Action@v5.4.3
         with:
           reports: "**/coverage.cobertura.xml"
           targetdir: "coverage-report"
@@ -70,50 +70,63 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Setup .NET
-        uses: actions/setup-dotnet@v1
+        uses: actions/setup-dotnet@v4
       - name: Create packages
         run: dotnet pack --configuration Release --output ./packages
       - name: Upload a Build Artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: NuGet packages
           path: packages/*.*
   deploy:
     name: Deploy
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: |
+      github.ref == 'refs/heads/main' && 
+      github.event_name == 'push' &&
+      (
+        startsWith(github.event.head_commit.message, 'feat:') ||
+        startsWith(github.event.head_commit.message, 'feat!:') ||
+        startsWith(github.event.head_commit.message, 'fix:') ||
+        startsWith(github.event.head_commit.message, 'fix!:') ||
+        contains(github.event.head_commit.message, 'breaking change')
+      )
     needs: [pack]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Setup .NET
-        uses: actions/setup-dotnet@v1
-      - uses: actions/download-artifact@v2
+        uses: actions/setup-dotnet@v4
+      - uses: actions/download-artifact@v4
         with:
           name: NuGet packages
           path: packages
       - name: Push packages
-        run: dotnet nuget push "packages/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
-      - uses: dotnet/nbgv@v0.4.0
+        run: dotnet nuget push "packages/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+      - uses: dotnet/nbgv@v0.4.2
         id: nbgv
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           name: v${{ steps.nbgv.outputs.SemVer2 }}
           tag_name: v${{ steps.nbgv.outputs.SemVer2 }}
           token: ${{ secrets.GITHUB_TOKEN }}
           generate_release_notes: true
-      - name: Comment relevant issues and merge requests
-        uses: apexskier/github-release-commenter@v1.3.2
+      - name: Wait for GitHub release to be available
+        run: sleep 30s
+        shell: bash
+      - name: Comment on relevant PRs and issues
+        uses: apexskier/github-release-commenter@v1.3.6
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           comment-template: |
             This is addressed in release {release_link}.
           label-template: |
             state: released
+
