@@ -1,6 +1,0 @@
-﻿{
-  "ExtraMembers": [],
-  "MissingMembers": [
-    "System.IO.Stream Create(System.String, Int32, System.IO.FileOptions, System.Security.AccessControl.FileSecurity)"
-  ]
-}
